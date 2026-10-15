@@ -1,9 +1,15 @@
-FROM jupyterhub/jupyterhub:0.9.3
+ARG JUPYTERHUB_VERSION=5.2.1
+FROM quay.io/jupyterhub/jupyterhub:${JUPYTERHUB_VERSION}
 
-COPY jupyterhub_config.py .
+RUN python3 -m pip install --no-cache-dir \
+    dockerspawner \
+    jupyterhub-nativeauthenticator \
+    jupyterhub-idle-culler \
+    bcrypt
 
-RUN wget https://raw.githubusercontent.com/jupyterhub/jupyterhub/0.9.3/examples/cull-idle/cull_idle_servers.py
+COPY jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
+COPY bootstrap_admin.py /srv/jupyterhub/bootstrap_admin.py
+COPY start.sh /srv/jupyterhub/start.sh
+RUN chmod +x /srv/jupyterhub/start.sh /srv/jupyterhub/bootstrap_admin.py
 
-RUN pip install \
-    dockerspawner==0.10.0 \
-    jhub_cas_authenticator==1.0.0
+CMD ["/srv/jupyterhub/start.sh"]

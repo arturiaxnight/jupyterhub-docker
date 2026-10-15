@@ -1,24 +1,31 @@
-debug = true
+# Traefik v3 static configuration (optional — enable with: docker compose --profile proxy up -d)
 
-logLevel = "ERROR"
-defaultEntryPoints = ["https","http"]
-
-[entryPoints]
-  [entryPoints.http]
-  address = ":80"
-    [entryPoints.http.redirect]
-    entryPoint = "https"
-  [entryPoints.https]
-  address = ":443"
-    [entryPoints.https.tls]
-      [[entryPoints.https.tls.certificates]]
-      certFile = "/etc/certs/jupyter_ens_uvsq_fr.crt"
-      keyFile = "/etc/certs/jupyter.ens.uvsq.fr.key"
-
-[docker]
-domain = "docker.local"
-watch = true
+[log]
+  level = "INFO"
 
 [api]
-  [api.statistics]
-    recentErrors = 10
+  dashboard = true
+  insecure = true
+
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+    [entryPoints.web.http.redirections.entryPoint]
+      to = "websecure"
+      scheme = "https"
+
+  [entryPoints.websecure]
+    address = ":443"
+
+[providers.docker]
+  endpoint = "unix:///var/run/docker.sock"
+  exposedByDefault = false
+  network = "apps"
+
+# Place your TLS certificate and key under reverse-proxy/certs/
+# and point these paths to the filenames inside the container.
+[tls.stores]
+  [tls.stores.default]
+    [tls.stores.default.defaultCertificate]
+      certFile = "/etc/certs/cert.pem"
+      keyFile = "/etc/certs/key.pem"

@@ -1,42 +1,74 @@
-version: '3'
-
 services:
   jupyterhub:
-    build: jupyterhub
-    image: jupyterhub_img
+    build:
+      context: ./jupyterhub
+      args:
+        JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION:-5.2.1}
+    image: ${COMPOSE_PROJECT_NAME:-jupyterhub}_hub:latest
     container_name: jupyterhub
+    restart: unless-stopped
+    networks:
+      - apps
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - jupyterhub_data:/srv/jupyterhub
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - jupyterhub_data:/data
     environment:
-      - DOCKER_JUPYTER_CONTAINER=jupyterlab_img
-      - DOCKER_NETWORK_NAME=${COMPOSE_PROJECT_NAME}_default
-      - HUB_IP=jupyterhub
-      - HOST
+      DOCKER_NOTEBOOK_IMAGE: ${COMPOSE_PROJECT_NAME:-jupyterhub}_lab:latest
+      DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-apps}
+      DOCKER_NOTEBOOK_DIR: /home/jovyan/work
+      HUB_IP: jupyterhub
+      JUPYTERHUB_ADMIN: ${JUPYTERHUB_ADMIN:-admin}
+      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-}
+      OPEN_SIGNUP: ${OPEN_SIGNUP:-false}
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      CPU_LIMIT: ${CPU_LIMIT:-4}
+      MEM_LIMIT: ${MEM_LIMIT:-16G}
+      ENABLE_GPU: ${ENABLE_GPU:-true}
+      GPU_COUNT: ${GPU_COUNT:--1}
+      CULL_TIMEOUT: ${CULL_TIMEOUT:-3600}
+    ports:
+      - "${HUB_PORT:-8000}:8000"
+    depends_on:
+      jupyterlab:
+        condition: service_completed_successfully
     labels:
       - "traefik.enable=true"
-      - "traefik.frontend.rule=Host:${HOST}"
-    restart: on-failure
+      - "traefik.http.routers.jupyterhub.rule=Host(`${HOST:-localhost}`)"
+      - "traefik.http.routers.jupyterhub.entrypoints=websecure"
+      - "traefik.http.routers.jupyterhub.tls=true"
+      - "traefik.http.services.jupyterhub.loadbalancer.server.port=8000"
 
+  # Builds the single-user Lab image; exits immediately so DockerSpawner can spawn it.
   jupyterlab:
-    build: jupyterlab
-    image: jupyterlab_img
-    container_name: jupyterlab-throaway
+    build: ./jupyterlab
+    image: ${COMPOSE_PROJECT_NAME:-jupyterhub}_lab:latest
+    container_name: jupyterlab-build
     network_mode: none
-    command: echo
+    command: "true"
+    restart: "no"
 
   reverse-proxy:
-    image: traefik
-    container_name: reverse-proxy
+    image: traefik:v3.3
+    container_name: jupyterhub-proxy
+    restart: unless-stopped
+    profiles:
+      - proxy
     ports:
       - "80:80"
       - "443:443"
       - "8080:8080"
     volumes:
-      - ./reverse-proxy/traefik.toml:/etc/traefik/traefik.toml
-      - /etc/certs:/etc/certs
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: on-failure
+      - ./reverse-proxy/traefik.toml:/etc/traefik/traefik.toml:ro
+      - ${TLS_CERTS_DIR:-./reverse-proxy/certs}:/etc/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - apps
 
 volumes:
   jupyterhub_data:
+
+networks:
+  apps:
+    external: true
+    name: ${DOCKER_NETWORK_NAME:-apps}

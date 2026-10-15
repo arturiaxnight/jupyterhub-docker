@@ -1,2 +1,6 @@
-.*
 *~
+.env
+reverse-proxy/certs/*
+!reverse-proxy/certs/.gitkeep
+*.pyc
+__pycache__/
